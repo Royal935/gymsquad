@@ -106,7 +106,7 @@ export default function AuthPage() {
           </div>
           <div style={{ fontSize: 14, color: 'var(--gym-sub)', lineHeight: 1.6 }}>
             We sent a verification link to <strong style={{ color: 'var(--gym-text)' }}>{email}</strong>.
-            Click the link in the email to activate your account, then log in.
+            Click the link in the email to activate your account, then log in. If you don't see it, check your spam folder.
           </div>
         </div>
 
