@@ -3,27 +3,29 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   updateProfile,
+  sendPasswordResetEmail,
 } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
 
 export default function AuthPage() {
-  const [mode, setMode] = useState('login') // 'login' | 'signup'
+  const [mode, setMode] = useState('login') // 'login' | 'signup' | 'reset'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
     setError('')
+    setSuccess('')
     setLoading(true)
     try {
       if (mode === 'signup') {
         if (!name.trim()) { setError('Enter your name'); setLoading(false); return }
         const cred = await createUserWithEmailAndPassword(auth, email, password)
         await updateProfile(cred.user, { displayName: name.trim() })
-        // Create user doc in Firestore
         await setDoc(doc(db, 'users', cred.user.uid), {
           uid: cred.user.uid,
           name: name.trim(),
@@ -33,6 +35,11 @@ export default function AuthPage() {
           friendIds: [],
           createdAt: serverTimestamp(),
         })
+      } else if (mode === 'reset') {
+        await sendPasswordResetEmail(auth, email)
+        setSuccess('Reset email sent! Check your inbox.')
+        setLoading(false)
+        return
       } else {
         await signInWithEmailAndPassword(auth, email, password)
       }
@@ -50,11 +57,19 @@ export default function AuthPage() {
     setLoading(false)
   }
 
+  function switchMode(newMode) {
+    setMode(newMode)
+    setError('')
+    setSuccess('')
+  }
+
   return (
     <div className="auth-page">
       <div className="auth-logo">GYMSQUAD</div>
       <div className="auth-sub">
-        {mode === 'login' ? 'Log back in. Time to grind.' : 'Create your account. Welcome to the squad.'}
+        {mode === 'login' && 'Log back in. Time to grind.'}
+        {mode === 'signup' && 'Create your account. Welcome to the squad.'}
+        {mode === 'reset' && "Enter your email and we'll send a reset link."}
       </div>
 
       <div className="form-group">
@@ -80,31 +95,54 @@ export default function AuthPage() {
             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           />
         </div>
-        <div>
-          <div className="form-label" style={{ marginBottom: 6 }}>Password</div>
-          <input
-            className="input"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          />
-        </div>
+        {mode !== 'reset' && (
+          <div>
+            <div className="form-label" style={{ marginBottom: 6 }}>Password</div>
+            <input
+              className="input"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            />
+          </div>
+        )}
       </div>
 
       {error && <div className="error-msg">{error}</div>}
+      {success && <div style={{ color: 'var(--gym-accent)', fontSize: 13, marginTop: '0.5rem' }}>{success}</div>}
 
       <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
-          {loading ? '...' : mode === 'login' ? 'LOG IN' : 'CREATE ACCOUNT'}
+          {loading ? '...' : mode === 'login' ? 'LOG IN' : mode === 'signup' ? 'CREATE ACCOUNT' : 'SEND RESET EMAIL'}
         </button>
-        <button
-          className="btn-secondary"
-          onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}
-        >
-          {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
-        </button>
+
+        {mode === 'login' && (
+          <>
+            <button className="btn-secondary" onClick={() => switchMode('signup')}>
+              Don't have an account? Sign up
+            </button>
+            <button
+              onClick={() => switchMode('reset')}
+              style={{ background: 'none', border: 'none', color: 'var(--gym-sub)', fontSize: 13, cursor: 'pointer', marginTop: 4 }}
+            >
+              Forgot password?
+            </button>
+          </>
+        )}
+
+        {mode === 'signup' && (
+          <button className="btn-secondary" onClick={() => switchMode('login')}>
+            Already have an account? Log in
+          </button>
+        )}
+
+        {mode === 'reset' && (
+          <button className="btn-secondary" onClick={() => switchMode('login')}>
+            ← Back to login
+          </button>
+        )}
       </div>
     </div>
   )
