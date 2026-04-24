@@ -4,18 +4,21 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  signOut,
 } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
 
 export default function AuthPage() {
-  const [mode, setMode] = useState('login') // 'login' | 'signup' | 'reset'
+  const [mode, setMode] = useState('login')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pendingVerification, setPendingVerification] = useState(false)
 
   async function handleSubmit() {
     setError('')
@@ -35,13 +38,22 @@ export default function AuthPage() {
           friendIds: [],
           createdAt: serverTimestamp(),
         })
+        await sendEmailVerification(cred.user)
+        await signOut(auth)
+        setPendingVerification(true)
       } else if (mode === 'reset') {
         await sendPasswordResetEmail(auth, email)
         setSuccess('Reset email sent! Check your inbox.')
         setLoading(false)
         return
       } else {
-        await signInWithEmailAndPassword(auth, email, password)
+        const cred = await signInWithEmailAndPassword(auth, email, password)
+        if (!cred.user.emailVerified) {
+          await signOut(auth)
+          setError('Please verify your email before logging in. Check your inbox.')
+          setLoading(false)
+          return
+        }
       }
     } catch (e) {
       const messages = {
@@ -57,10 +69,60 @@ export default function AuthPage() {
     setLoading(false)
   }
 
+  async function resendVerification() {
+    setError('')
+    setSuccess('')
+    setLoading(true)
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password)
+      await sendEmailVerification(cred.user)
+      await signOut(auth)
+      setSuccess('Verification email resent! Check your inbox.')
+    } catch (e) {
+      setError('Could not resend email. Try logging in again.')
+    }
+    setLoading(false)
+  }
+
   function switchMode(newMode) {
     setMode(newMode)
     setError('')
     setSuccess('')
+    setPendingVerification(false)
+  }
+
+  // Verification pending screen
+  if (pendingVerification) {
+    return (
+      <div className="auth-page">
+        <div className="auth-logo">GYMSQUAD</div>
+        <div style={{
+          background: '#1a1f0a', border: '1px solid #3d4d0f',
+          borderRadius: 12, padding: '1.5rem', marginBottom: '1.5rem',
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📧</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--gym-accent)', marginBottom: 8 }}>
+            CHECK YOUR EMAIL
+          </div>
+          <div style={{ fontSize: 14, color: 'var(--gym-sub)', lineHeight: 1.6 }}>
+            We sent a verification link to <strong style={{ color: 'var(--gym-text)' }}>{email}</strong>.
+            Click the link in the email to activate your account, then log in.
+          </div>
+        </div>
+
+        {error && <div className="error-msg" style={{ marginBottom: 10 }}>{error}</div>}
+        {success && <div style={{ color: 'var(--gym-accent)', fontSize: 13, marginBottom: 10 }}>{success}</div>}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button className="btn-primary" onClick={() => switchMode('login')}>
+            GO TO LOGIN
+          </button>
+          <button className="btn-secondary" onClick={resendVerification} disabled={loading}>
+            {loading ? '...' : 'Resend verification email'}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
