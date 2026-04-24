@@ -70,19 +70,34 @@ function buildMonthGrid(year, month) {
 }
 
 // Get all year+month combos from earliest checkin to now
-function getAvailableMonths(streakDays = []) {
+function getAvailableMonths(streakDays = [], createdAt = null) {
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth()
 
-  if (!streakDays.length) {
-    return [{ year: currentYear, month: currentMonth }]
+  // Default start: 12 months back
+  let startYear = currentYear
+  let startMonth = currentMonth - 11
+  if (startMonth < 0) { startMonth += 12; startYear -= 1 }
+
+  // If createdAt is older, use that
+  if (createdAt && createdAt.seconds) {
+    const created = new Date(createdAt.seconds * 1000)
+    if (created < new Date(startYear, startMonth, 1)) {
+      startYear = created.getFullYear()
+      startMonth = created.getMonth()
+    }
   }
 
-  const sorted = [...streakDays].sort()
-  const earliest = new Date(sorted[0])
-  const startYear = earliest.getFullYear()
-  const startMonth = earliest.getMonth()
+  // If checkin data is older, extend back
+  if (streakDays.length) {
+    const sorted = [...streakDays].sort()
+    const earliest = new Date(sorted[0])
+    if (earliest < new Date(startYear, startMonth, 1)) {
+      startYear = earliest.getFullYear()
+      startMonth = earliest.getMonth()
+    }
+  }
 
   const months = []
   let y = startYear
@@ -111,7 +126,7 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
   const doneDays = new Set(person.streakDays || [])
   const streak = calcStreak(person.streakDays || [])
   const total = (person.streakDays || []).length
-  const availableMonths = getAvailableMonths(person.streakDays || [])
+  const availableMonths = getAvailableMonths(person.streakDays || [], person.createdAt || null)
   const [selectedIdx, setSelectedIdx] = useState(0) // 0 = most recent
 
   const { year, month } = availableMonths[selectedIdx]
@@ -276,7 +291,7 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
         </div>
 
         {/* Year quick-jump if multiple years */}
-        {availableMonths.some(m => m.year !== now.getFullYear()) && (
+        {availableMonths.length > 0 && (
           <div style={{ marginTop: '1.25rem' }}>
             <div style={{ fontSize: 11, color: 'var(--gym-sub)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
               Jump to year
