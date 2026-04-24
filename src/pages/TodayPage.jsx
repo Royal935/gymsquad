@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore'
+import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -23,6 +23,7 @@ export default function TodayPage({ user }) {
   const [profile, setProfile] = useState(null)
   const [checked, setChecked] = useState(new Set())
   const [saving, setSaving] = useState(false)
+  const [confirmUndo, setConfirmUndo] = useState(false)
 
   useEffect(() => {
     const ref = doc(db, 'users', user.uid)
@@ -53,14 +54,20 @@ export default function TodayPage({ user }) {
   async function markDone() {
     if (saving || alreadyDoneToday) return
     setSaving(true)
-    const ref = doc(db, 'users', user.uid)
-    await updateDoc(ref, {
+    await updateDoc(doc(db, 'users', user.uid), {
       streakDays: arrayUnion(todayKey()),
-      lastCheckin: {
-        date: todayKey(),
-        muscle: todaySlot.muscle,
-      }
+      lastCheckin: { date: todayKey(), muscle: todaySlot.muscle },
     })
+    setSaving(false)
+  }
+
+  async function undoDay() {
+    setSaving(true)
+    await updateDoc(doc(db, 'users', user.uid), {
+      streakDays: arrayRemove(todayKey()),
+    })
+    setChecked(new Set())
+    setConfirmUndo(false)
     setSaving(false)
   }
 
@@ -73,14 +80,9 @@ export default function TodayPage({ user }) {
         <div className="page-title">{todaySlot.muscle}</div>
         {exercises.length > 0 && (
           <div style={{
-            display: 'inline-block',
-            marginTop: 8,
-            background: '#1f1f1f',
-            border: '1px solid #2a2a2a',
-            color: '#888',
-            fontSize: 11,
-            padding: '4px 10px',
-            borderRadius: 20,
+            display: 'inline-block', marginTop: 8,
+            background: '#1f1f1f', border: '1px solid #2a2a2a',
+            color: '#888', fontSize: 11, padding: '4px 10px', borderRadius: 20,
           }}>
             {exercises.map(e => e.muscle).filter((v,i,a) => a.indexOf(v) === i).join(' · ')}
           </div>
@@ -122,12 +124,46 @@ export default function TodayPage({ user }) {
       </div>
 
       {/* CTA */}
-      <div className="p-page">
+      <div className="p-page" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {exercises.length > 0 && (
           alreadyDoneToday ? (
-            <button className="btn-primary" style={{ background: '#1a1f0a', color: 'var(--gym-accent)', border: '1px solid #3d4d0f' }} disabled>
-              ✓ DAY LOGGED
-            </button>
+            <>
+              <button
+                className="btn-primary"
+                style={{ background: '#1a1f0a', color: 'var(--gym-accent)', border: '1px solid #3d4d0f' }}
+                onClick={() => setConfirmUndo(true)}
+                disabled={saving}
+              >
+                ✓ DAY LOGGED — tap to undo
+              </button>
+
+              {confirmUndo && (
+                <div className="card" style={{ padding: '14px 16px' }}>
+                  <div style={{ fontSize: 14, color: 'var(--gym-text)', marginBottom: 12 }}>
+                    Undo today's log? Your streak for today will be removed.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => setConfirmUndo(false)}
+                      style={{ flex: 1 }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={undoDay}
+                      disabled={saving}
+                      style={{
+                        flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #3d1f1f',
+                        background: '#1f1212', color: '#ff6b6b', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                      }}
+                    >
+                      {saving ? '...' : 'Undo'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <button
               className="btn-primary"
