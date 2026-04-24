@@ -7,7 +7,8 @@ import { db } from '../lib/firebase'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function todayKey() {
   const d = new Date()
@@ -32,8 +33,7 @@ function calcStreak(days = []) {
   if (!days.length) return 0
   const sorted = [...days].sort().reverse()
   let streak = 0
-  const today = todayKey()
-  let check = today
+  let check = todayKey()
   for (const day of sorted) {
     if (day === check) {
       streak++
@@ -45,24 +45,54 @@ function calcStreak(days = []) {
   return streak
 }
 
-// Build a 12-week grid (84 days) ending today
-function buildGrid() {
-  const cells = []
+// Build a calendar grid for a given year+month
+function buildMonthGrid(year, month) {
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
   const today = new Date()
-  // Go back to the Sunday of 11 weeks ago
-  const start = new Date(today)
-  start.setDate(start.getDate() - 83)
-  // align to Sunday
-  start.setDate(start.getDate() - start.getDay())
+  today.setHours(23, 59, 59, 999)
 
-  for (let i = 0; i < 84; i++) {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const isFuture = d > today
-    cells.push({ key, date: d, isFuture, dayOfWeek: d.getDay(), month: d.getMonth(), day: d.getDate() })
+  // leading empty cells so week starts on Sunday
+  const startOffset = firstDay.getDay()
+  const cells = []
+
+  for (let i = 0; i < startOffset; i++) {
+    cells.push(null)
   }
+
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const date = new Date(year, month, d)
+    const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    cells.push({ key, day: d, isFuture: date > today })
+  }
+
   return cells
+}
+
+// Get all year+month combos from earliest checkin to now
+function getAvailableMonths(streakDays = []) {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+
+  if (!streakDays.length) {
+    return [{ year: currentYear, month: currentMonth }]
+  }
+
+  const sorted = [...streakDays].sort()
+  const earliest = new Date(sorted[0])
+  const startYear = earliest.getFullYear()
+  const startMonth = earliest.getMonth()
+
+  const months = []
+  let y = startYear
+  let m = startMonth
+  while (y < currentYear || (y === currentYear && m <= currentMonth)) {
+    months.push({ year: y, month: m })
+    m++
+    if (m > 11) { m = 0; y++ }
+  }
+  return months.reverse() // newest first
 }
 
 const AVATAR_COLORS = [
@@ -76,23 +106,27 @@ const AVATAR_COLORS = [
 ]
 
 function HabitModal({ person, isSelf, colorIndex, onClose }) {
+  const now = new Date()
   const [bg, fg] = AVATAR_COLORS[colorIndex % AVATAR_COLORS.length]
   const doneDays = new Set(person.streakDays || [])
   const streak = calcStreak(person.streakDays || [])
   const total = (person.streakDays || []).length
-  const grid = buildGrid()
+  const availableMonths = getAvailableMonths(person.streakDays || [])
+  const [selectedIdx, setSelectedIdx] = useState(0) // 0 = most recent
 
-  // Group into weeks (columns of 7)
+  const { year, month } = availableMonths[selectedIdx]
+  const grid = buildMonthGrid(year, month)
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`
+  const monthTotal = (person.streakDays || []).filter(d => d.startsWith(monthKey)).length
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
+  const daysSoFar = isCurrentMonth ? now.getDate() : daysInMonth
+
+  // group grid into weeks
   const weeks = []
   for (let i = 0; i < grid.length; i += 7) {
     weeks.push(grid.slice(i, i + 7))
   }
-
-  // Month labels — show month name at first cell of each month
-  const monthLabels = weeks.map(week => {
-    const firstOfMonth = week.find(c => c.day === 1)
-    return firstOfMonth ? MONTH_NAMES[firstOfMonth.month] : ''
-  })
 
   return (
     <div
@@ -100,7 +134,7 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-        zIndex: 200, padding: '0',
+        zIndex: 200,
       }}
     >
       <div
@@ -108,8 +142,8 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
         style={{
           background: '#181818', borderRadius: '16px 16px 0 0',
           border: '1px solid #2a2a2a', width: '100%', maxWidth: 480,
-          padding: '1.25rem 1rem 2rem',
-          maxHeight: '85vh', overflowY: 'auto',
+          padding: '1.25rem 1rem 2.5rem',
+          maxHeight: '90vh', overflowY: 'auto',
         }}
       >
         {/* Handle */}
@@ -121,11 +155,11 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
             {initials(person.name)}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 17, fontWeight: 500 }}>
+            <div style={{ fontSize: 17, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
               {person.name}
               {isSelf && (
                 <span style={{
-                  marginLeft: 8, fontSize: 10, padding: '2px 7px', borderRadius: 20,
+                  fontSize: 10, padding: '2px 7px', borderRadius: 20,
                   background: '#1a1f0a', color: 'var(--gym-accent)', border: '1px solid #3d4d0f',
                 }}>you</span>
               )}
@@ -135,16 +169,15 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--gym-muted)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
 
-        {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: '1.25rem' }}>
+        {/* Overall stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: '1.25rem' }}>
           {[
-            { label: 'Streak', value: `${streak}d` },
-            { label: 'Total', value: total },
-            { label: 'This month', value: (person.streakDays || []).filter(d => d.startsWith(todayKey().slice(0, 7))).length },
+            { label: 'Current streak', value: `${streak} days` },
+            { label: 'Total check-ins', value: total },
           ].map(s => (
             <div key={s.label} style={{
               background: '#1f1f1f', border: '1px solid #2a2a2a',
-              borderRadius: 10, padding: '10px 8px', textAlign: 'center',
+              borderRadius: 10, padding: '10px 12px', textAlign: 'center',
             }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--gym-accent)' }}>{s.value}</div>
               <div style={{ fontSize: 11, color: 'var(--gym-sub)', marginTop: 2 }}>{s.label}</div>
@@ -152,63 +185,124 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
           ))}
         </div>
 
-        {/* Day labels */}
-        <div style={{ display: 'flex', gap: 3, marginBottom: 4, paddingLeft: 28 }}>
+        {/* Month navigator */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <button
+            onClick={() => setSelectedIdx(i => Math.min(i + 1, availableMonths.length - 1))}
+            disabled={selectedIdx >= availableMonths.length - 1}
+            style={{
+              background: 'none', border: '1px solid var(--gym-border)', borderRadius: 8,
+              color: selectedIdx >= availableMonths.length - 1 ? 'var(--gym-border)' : 'var(--gym-text)',
+              fontSize: 18, width: 36, height: 36, cursor: selectedIdx >= availableMonths.length - 1 ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >‹</button>
+
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--gym-accent)', letterSpacing: 1 }}>
+              {MONTH_NAMES[month].toUpperCase()}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--gym-sub)' }}>{year}</div>
+          </div>
+
+          <button
+            onClick={() => setSelectedIdx(i => Math.max(i - 1, 0))}
+            disabled={selectedIdx <= 0}
+            style={{
+              background: 'none', border: '1px solid var(--gym-border)', borderRadius: 8,
+              color: selectedIdx <= 0 ? 'var(--gym-border)' : 'var(--gym-text)',
+              fontSize: 18, width: 36, height: 36, cursor: selectedIdx <= 0 ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >›</button>
+        </div>
+
+        {/* Month stat */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: '#1f1f1f', border: '1px solid #2a2a2a',
+          borderRadius: 10, padding: '10px 14px', marginBottom: '1rem',
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--gym-sub)' }}>
+            {MONTH_SHORT[month]} {year} check-ins
+          </span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--gym-accent)' }}>
+            {monthTotal} / {daysSoFar}
+          </span>
+        </div>
+
+        {/* Day of week headers */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
           {DAY_LABELS.map((d, i) => (
-            <div key={i} style={{ width: 14, fontSize: 9, color: 'var(--gym-muted)', textAlign: 'center' }}>{d}</div>
+            <div key={i} style={{ textAlign: 'center', fontSize: 10, color: 'var(--gym-muted)', fontWeight: 500 }}>{d}</div>
           ))}
         </div>
 
-        {/* Habit grid — columns = weeks, rows = days of week */}
-        <div style={{ display: 'flex', gap: 3 }}>
-          {/* Month labels on left */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', width: 24, flexShrink: 0 }}>
-            {weeks.map((week, wi) => (
-              <div key={wi} style={{ height: 17, fontSize: 8, color: 'var(--gym-muted)', display: 'flex', alignItems: 'center' }}>
-                {monthLabels[wi]}
-              </div>
-            ))}
-          </div>
-
-          {/* Day columns */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
-            {[0,1,2,3,4,5,6].map(dayOfWeek => (
-              <div key={dayOfWeek} style={{ display: 'flex', gap: 3 }}>
-                {weeks.map((week, wi) => {
-                  const cell = week[dayOfWeek]
-                  if (!cell) return <div key={wi} style={{ width: 14, height: 14 }} />
-                  const done = doneDays.has(cell.key)
-                  const isToday = cell.key === todayKey()
-                  return (
-                    <div
-                      key={wi}
-                      title={cell.key}
-                      style={{
-                        width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                        background: cell.isFuture
-                          ? 'transparent'
-                          : done
-                            ? 'var(--gym-accent)'
-                            : '#2a2a2a',
-                        border: isToday ? '1px solid var(--gym-accent)' : '1px solid transparent',
-                        opacity: cell.isFuture ? 0.2 : 1,
-                      }}
-                    />
-                  )
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, justifyContent: 'flex-end' }}>
-          <span style={{ fontSize: 10, color: 'var(--gym-muted)' }}>Less</span>
-          {['#2a2a2a', '#3d4d0f', '#6a8a1f', '#a0c830', '#e8ff47'].map(c => (
-            <div key={c} style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
+        {/* Calendar grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {weeks.map((week, wi) => (
+            <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+              {week.map((cell, di) => {
+                if (!cell) return <div key={di} />
+                const done = doneDays.has(cell.key)
+                const isToday = cell.key === todayKey()
+                return (
+                  <div
+                    key={di}
+                    style={{
+                      aspectRatio: '1',
+                      borderRadius: 6,
+                      background: cell.isFuture
+                        ? 'transparent'
+                        : done
+                          ? 'var(--gym-accent)'
+                          : '#2a2a2a',
+                      border: isToday
+                        ? '2px solid var(--gym-accent)'
+                        : '2px solid transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11,
+                      color: done ? '#000' : cell.isFuture ? 'transparent' : 'var(--gym-muted)',
+                      fontWeight: done ? 500 : 400,
+                      opacity: cell.isFuture ? 0.3 : 1,
+                    }}
+                  >
+                    {cell.day}
+                  </div>
+                )
+              })}
+            </div>
           ))}
-          <span style={{ fontSize: 10, color: 'var(--gym-muted)' }}>More</span>
         </div>
+
+        {/* Year quick-jump if multiple years */}
+        {availableMonths.some(m => m.year !== now.getFullYear()) && (
+          <div style={{ marginTop: '1.25rem' }}>
+            <div style={{ fontSize: 11, color: 'var(--gym-sub)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+              Jump to year
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[...new Set(availableMonths.map(m => m.year))].map(y => (
+                <button
+                  key={y}
+                  onClick={() => {
+                    const idx = availableMonths.findIndex(m => m.year === y && (y < now.getFullYear() ? m.month === 11 : m.month === now.getMonth()))
+                    setSelectedIdx(idx >= 0 ? idx : availableMonths.findIndex(m => m.year === y))
+                  }}
+                  style={{
+                    padding: '6px 14px', borderRadius: 20, border: '1px solid',
+                    borderColor: year === y ? 'var(--gym-accent)' : 'var(--gym-border)',
+                    background: year === y ? '#1a1f0a' : 'transparent',
+                    color: year === y ? 'var(--gym-accent)' : 'var(--gym-sub)',
+                    fontSize: 13, cursor: 'pointer',
+                  }}
+                >
+                  {y}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -221,7 +315,7 @@ export default function SquadPage({ user }) {
   const [addMsg, setAddMsg] = useState('')
   const [addError, setAddError] = useState('')
   const [adding, setAdding] = useState(false)
-  const [selected, setSelected] = useState(null) // { person, isSelf, colorIndex }
+  const [selected, setSelected] = useState(null)
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'users', user.uid), snap => {
@@ -333,7 +427,6 @@ export default function SquadPage({ user }) {
         </div>
       </div>
 
-      {/* Add friend */}
       <div className="p-page mb-2">
         <div style={{ display: 'flex', gap: 8 }}>
           <input
@@ -357,7 +450,6 @@ export default function SquadPage({ user }) {
         {addError && <div className="error-msg" style={{ marginTop: 6 }}>{addError}</div>}
       </div>
 
-      {/* Roster */}
       <div className="section-gap">
         <MemberCard f={profile} isSelf={true} colorIndex={0} />
         {friends.length === 0 ? (
@@ -374,7 +466,6 @@ export default function SquadPage({ user }) {
         )}
       </div>
 
-      {/* Manage squad */}
       {friends.length > 0 && (
         <div className="p-page" style={{ marginTop: '1.5rem' }}>
           <div style={{ fontSize: 12, color: 'var(--gym-sub)', marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
@@ -394,7 +485,6 @@ export default function SquadPage({ user }) {
         </div>
       )}
 
-      {/* Modal */}
       {selected && (
         <HabitModal
           person={selected.person}
