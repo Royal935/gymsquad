@@ -27,6 +27,7 @@ function initials(name = '') {
 }
 
 const AVATAR_COLORS = [
+  ['#1a1f0a', '#e8ff47'],
   ['#2a1f3a', '#c4a0f5'],
   ['#1a2f45', '#7ab8f5'],
   ['#1f2e18', '#a0d870'],
@@ -44,30 +45,25 @@ export default function SquadPage({ user }) {
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
-    const ref = doc(db, 'users', user.uid)
-    const unsub = onSnapshot(ref, snap => {
+    const unsub = onSnapshot(doc(db, 'users', user.uid), snap => {
       if (snap.exists()) setProfile(snap.data())
     })
     return unsub
   }, [user.uid])
 
-  // Real-time listeners for each friend
   useEffect(() => {
     if (!profile?.friendIds?.length) { setFriends([]); return }
-    const unsubs = profile.friendIds.map(fid => {
-      return onSnapshot(doc(db, 'users', fid), snap => {
+    const unsubs = profile.friendIds.map(fid =>
+      onSnapshot(doc(db, 'users', fid), snap => {
         if (!snap.exists()) return
         setFriends(prev => {
           const data = { ...snap.data(), uid: fid }
           const idx = prev.findIndex(f => f.uid === fid)
           if (idx === -1) return [...prev, data]
-          const next = [...prev]
-          next[idx] = data
-          return next
+          const next = [...prev]; next[idx] = data; return next
         })
       })
-    })
-    // Remove any friends no longer in list
+    )
     setFriends(prev => prev.filter(f => profile.friendIds.includes(f.uid)))
     return () => unsubs.forEach(u => u())
   }, [profile?.friendIds?.join(',')])
@@ -97,19 +93,63 @@ export default function SquadPage({ user }) {
 
   const week7 = last7Keys()
   const today = todayKey()
-  const doneToday = friends.filter(f => (f.streakDays || []).includes(today)).length
   const todayName = DAYS[new Date().getDay()]
+  const selfDoneToday = (profile.streakDays || []).includes(today)
+  const friendsDoneToday = friends.filter(f => (f.streakDays || []).includes(today)).length
+  const totalCheckedIn = (selfDoneToday ? 1 : 0) + friendsDoneToday
+  const totalMembers = 1 + friends.length
+
+  function MemberCard({ f, isSelf, colorIndex }) {
+    const [bg, fg] = AVATAR_COLORS[colorIndex % AVATAR_COLORS.length]
+    const doneDays = new Set(f.streakDays || [])
+    const doneToday = doneDays.has(today)
+    const todaySlot = f.split?.find(s => s.day === todayName)
+    const splitLabel = todaySlot?.muscle || 'REST'
+
+    return (
+      <div
+        className="friend-card"
+        style={isSelf ? { border: '1px solid var(--gym-accent)', background: '#111' } : {}}
+      >
+        <div className="avatar" style={{ background: bg, color: fg }}>
+          {initials(f.name)}
+        </div>
+        <div className="friend-info">
+          <div className="friend-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {f.name}
+            {isSelf && (
+              <span style={{
+                fontSize: 10, padding: '2px 7px', borderRadius: 20,
+                background: '#1a1f0a', color: 'var(--gym-accent)', border: '1px solid #3d4d0f',
+              }}>
+                you
+              </span>
+            )}
+          </div>
+          <div className="friend-split">{splitLabel} today</div>
+        </div>
+        <div className="friend-status">
+          <div className={`done-pill ${doneToday ? 'yes' : 'no'}`}>
+            {doneToday ? '✓ Done' : '– Not yet'}
+          </div>
+          <div className="mini-streak">
+            {week7.map(k => (
+              <div key={k} className={`mini-dot ${doneDays.has(k) ? 'lit' : ''}`} />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
       <div className="page-header" style={{ marginBottom: '1rem' }}>
         <div className="page-label">Live updates</div>
         <div className="page-title">SQUAD</div>
-        {friends.length > 0 && (
-          <div style={{ color: 'var(--gym-sub)', fontSize: 13, marginTop: 6 }}>
-            {doneToday}/{friends.length} checked in today
-          </div>
-        )}
+        <div style={{ color: 'var(--gym-sub)', fontSize: 13, marginTop: 6 }}>
+          {totalCheckedIn}/{totalMembers} checked in today
+        </div>
       </div>
 
       {/* Add friend */}
@@ -136,54 +176,31 @@ export default function SquadPage({ user }) {
         {addError && <div className="error-msg" style={{ marginTop: 6 }}>{addError}</div>}
       </div>
 
-      {/* Friends list */}
+      {/* Roster — self always pinned at top */}
       <div className="section-gap">
+        <MemberCard f={profile} isSelf={true} colorIndex={0} />
+
         {friends.length === 0 ? (
-          <div className="card text-center" style={{ padding: '2rem' }}>
+          <div className="card text-center" style={{ padding: '1.5rem' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🏋️</div>
             <div style={{ color: 'var(--gym-sub)', fontSize: 14 }}>
               Add friends by email to see their workouts
             </div>
           </div>
         ) : (
-          friends.map((f, i) => {
-            const [bg, fg] = AVATAR_COLORS[i % AVATAR_COLORS.length]
-            const doneDays = new Set(f.streakDays || [])
-            const doneToday = doneDays.has(today)
-            const todaySlot = f.split?.find(s => s.day === todayName)
-            const splitLabel = todaySlot?.muscle || 'REST'
-
-            return (
-              <div key={f.uid} className="friend-card">
-                <div className="avatar" style={{ background: bg, color: fg }}>
-                  {initials(f.name)}
-                </div>
-                <div className="friend-info">
-                  <div className="friend-name">{f.name}</div>
-                  <div className="friend-split">{splitLabel} today</div>
-                </div>
-                <div className="friend-status">
-                  <div className={`done-pill ${doneToday ? 'yes' : 'no'}`}>
-                    {doneToday ? '✓ Done' : '– Not yet'}
-                  </div>
-                  <div className="mini-streak">
-                    {week7.map(k => (
-                      <div key={k} className={`mini-dot ${doneDays.has(k) ? 'lit' : ''}`} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )
-          })
+          friends.map((f, i) => (
+            <MemberCard key={f.uid} f={f} isSelf={false} colorIndex={i + 1} />
+          ))
         )}
       </div>
 
+      {/* Manage squad */}
       {friends.length > 0 && (
         <div className="p-page" style={{ marginTop: '1.5rem' }}>
           <div style={{ fontSize: 12, color: 'var(--gym-sub)', marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
             Manage squad
           </div>
-          {friends.map((f, i) => (
+          {friends.map(f => (
             <div key={f.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--gym-border)' }}>
               <span style={{ fontSize: 14 }}>{f.name}</span>
               <button
