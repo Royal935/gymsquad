@@ -2,9 +2,8 @@ import { useState } from 'react'
 import TodayPage from './TodayPage'
 import SplitPage from './SplitPage'
 import SquadPage from './SquadPage'
+import WeightPage from './WeightPage'
 import ProfilePage from './ProfilePage'
-
-const TABS = ['today', 'split', 'squad', 'profile']
 
 export default function MainApp({ user }) {
   const [tab, setTab] = useState('today')
@@ -14,6 +13,7 @@ export default function MainApp({ user }) {
       {tab === 'today' && <TodayPage user={user} />}
       {tab === 'split' && <SplitPage user={user} />}
       {tab === 'squad' && <SquadPage user={user} />}
+      {tab === 'weight' && <WeightPage user={user} />}
       {tab === 'profile' && <ProfilePage user={user} />}
 
       <nav className="bottom-nav">
@@ -41,6 +41,13 @@ export default function MainApp({ user }) {
             <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
           Squad
+        </button>
+        <button className={`nav-item ${tab === 'weight' ? 'active' : ''}`} onClick={() => setTab('weight')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 12h8M12 8v8"/>
+          </svg>
+          Weight
         </button>
         <button className={`nav-item ${tab === 'profile' ? 'active' : ''}`} onClick={() => setTab('profile')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
