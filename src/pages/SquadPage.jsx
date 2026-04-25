@@ -143,31 +143,7 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
     weeks.push(grid.slice(i, i + 7))
   }
 
-  // Swipe down to close
-  const touchStartY = useRef(null)
-  const [translateY, setTranslateY] = useState(0)
-  const [closing, setClosing] = useState(false)
 
-  function onTouchStart(e) {
-    touchStartY.current = e.touches[0].clientY
-  }
-
-  function onTouchMove(e) {
-    if (touchStartY.current === null) return
-    const delta = e.touches[0].clientY - touchStartY.current
-    if (delta > 0) setTranslateY(delta)
-  }
-
-  function onTouchEnd() {
-    if (translateY > 120) {
-      setClosing(true)
-      setTranslateY(600)
-      setTimeout(onClose, 300)
-    } else {
-      setTranslateY(0)
-    }
-    touchStartY.current = null
-  }
 
   return (
     <div
@@ -180,27 +156,14 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
     >
       <div
         onClick={e => e.stopPropagation()}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
         style={{
           background: '#181818', borderRadius: '16px 16px 0 0',
           border: '1px solid #2a2a2a', width: '100%', maxWidth: 480,
           padding: '1.25rem 1rem 2.5rem',
           maxHeight: '90vh', overflowY: 'auto',
-          transform: `translateY(${translateY}px)`,
-          transition: closing || translateY === 0 ? 'transform 0.3s ease' : 'none',
         }}
       >
-        {/* Handle — drag zone */}
-        <div
-          style={{ padding: '4px 0 12px', margin: '-1.25rem -1rem 1rem', cursor: 'grab', touchAction: 'none' }}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        >
-          <div style={{ width: 36, height: 4, background: '#555', borderRadius: 2, margin: '0 auto' }} />
-        </div>
+
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.25rem' }}>
@@ -219,7 +182,7 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
             </div>
             <div style={{ fontSize: 12, color: 'var(--gym-sub)', marginTop: 2 }}>Check-in history</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--gym-muted)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--gym-text)', fontSize: 28, fontWeight: 700, cursor: 'pointer', lineHeight: 1, padding: '4px 8px' }}>✕</button>
         </div>
 
         {/* Overall stats */}
