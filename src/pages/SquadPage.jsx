@@ -144,27 +144,29 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
   }
 
   // Swipe down to close
-  const dragStart = { y: 0, dragging: false }
+  const touchStartY = useRef(null)
   const [translateY, setTranslateY] = useState(0)
+  const [closing, setClosing] = useState(false)
 
   function onTouchStart(e) {
-    dragStart.y = e.touches[0].clientY
-    dragStart.dragging = true
+    touchStartY.current = e.touches[0].clientY
   }
 
   function onTouchMove(e) {
-    if (!dragStart.dragging) return
-    const delta = e.touches[0].clientY - dragStart.y
+    if (touchStartY.current === null) return
+    const delta = e.touches[0].clientY - touchStartY.current
     if (delta > 0) setTranslateY(delta)
   }
 
   function onTouchEnd() {
-    if (translateY > 100) {
-      onClose()
+    if (translateY > 120) {
+      setClosing(true)
+      setTranslateY(600)
+      setTimeout(onClose, 300)
     } else {
       setTranslateY(0)
     }
-    dragStart.dragging = false
+    touchStartY.current = null
   }
 
   return (
@@ -187,7 +189,7 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
           padding: '1.25rem 1rem 2.5rem',
           maxHeight: '90vh', overflowY: 'auto',
           transform: `translateY(${translateY}px)`,
-          transition: translateY === 0 ? 'transform 0.3s ease' : 'none',
+          transition: closing || translateY === 0 ? 'transform 0.3s ease' : 'none',
         }}
       >
         {/* Handle — drag zone */}
