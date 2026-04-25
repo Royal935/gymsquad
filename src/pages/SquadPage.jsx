@@ -127,7 +127,7 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
   const streak = calcStreak(person.streakDays || [])
   const total = (person.streakDays || []).length
   const availableMonths = getAvailableMonths(person.streakDays || [], person.createdAt || null)
-  const [selectedIdx, setSelectedIdx] = useState(0) // 0 = most recent
+  const [selectedIdx, setSelectedIdx] = useState(0)
 
   const { year, month } = availableMonths[selectedIdx]
   const grid = buildMonthGrid(year, month)
@@ -143,6 +143,30 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
     weeks.push(grid.slice(i, i + 7))
   }
 
+  // Swipe down to close
+  const dragStart = { y: 0, dragging: false }
+  const [translateY, setTranslateY] = useState(0)
+
+  function onTouchStart(e) {
+    dragStart.y = e.touches[0].clientY
+    dragStart.dragging = true
+  }
+
+  function onTouchMove(e) {
+    if (!dragStart.dragging) return
+    const delta = e.touches[0].clientY - dragStart.y
+    if (delta > 0) setTranslateY(delta)
+  }
+
+  function onTouchEnd() {
+    if (translateY > 100) {
+      onClose()
+    } else {
+      setTranslateY(0)
+    }
+    dragStart.dragging = false
+  }
+
   return (
     <div
       onClick={onClose}
@@ -154,15 +178,27 @@ function HabitModal({ person, isSelf, colorIndex, onClose }) {
     >
       <div
         onClick={e => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
         style={{
           background: '#181818', borderRadius: '16px 16px 0 0',
           border: '1px solid #2a2a2a', width: '100%', maxWidth: 480,
           padding: '1.25rem 1rem 2.5rem',
           maxHeight: '90vh', overflowY: 'auto',
+          transform: `translateY(${translateY}px)`,
+          transition: translateY === 0 ? 'transform 0.3s ease' : 'none',
         }}
       >
-        {/* Handle */}
-        <div style={{ width: 36, height: 4, background: '#333', borderRadius: 2, margin: '0 auto 1.25rem' }} />
+        {/* Handle — drag zone */}
+        <div
+          style={{ padding: '4px 0 12px', margin: '-1.25rem -1rem 1rem', cursor: 'grab', touchAction: 'none' }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          <div style={{ width: 36, height: 4, background: '#555', borderRadius: 2, margin: '0 auto' }} />
+        </div>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.25rem' }}>
