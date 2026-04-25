@@ -3,12 +3,12 @@ import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAMfbBl4nFd2fGdWpD1ukmPhCpMBuoMQc0",
-  authDomain: "gymsquad-dd414.firebaseapp.com",
-  projectId: "gymsquad-dd414",
-  storageBucket: "gymsquad-dd414.firebasestorage.app",
-  messagingSenderId: "448146792168",
-  appId: "1:448146792168:web:bc26baf049f2b28771b35d",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
 const app = initializeApp(firebaseConfig)
